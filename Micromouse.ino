@@ -1,4 +1,5 @@
-#include "QueueArray.h"
+#include "QueueList.h"
+//#include "QueueArray.h"
 #include <Wire.h>
 
 
@@ -77,7 +78,6 @@ int rightEncoder;
 #define CHECK_DISTANCE_RIGHT 10
 
 
-//#include "Cell.h"
 #define ISNORTH 1		//0b00000001
 #define ISEAST 2		//0b00000010
 #define ISSOUTH 4		//0b00000100
@@ -95,12 +95,12 @@ struct Cell
 	byte data;
 };
 
-#include "QueueArray.h"
+//#include "QueueArray.h"
 
 #define MAZE_LENGTH 16
 Cell maze[MAZE_LENGTH][MAZE_LENGTH];
 bool turbo = false;
-QueueArray<byte> moveQueue;
+QueueList<byte> moveQueue;
 byte useless = 255;
 bool TO_CENTER = true;
 bool TO_START = false;
@@ -151,8 +151,6 @@ void setup()
 	pinMode(LEDPin, OUTPUT); // Use LED indicator (if required)
 
 	
-	
-	
 	for(byte i = 0; i < MAZE_LENGTH; i++)
 	{
 		for(byte j = 0; j < MAZE_LENGTH; j++)
@@ -172,17 +170,16 @@ void setup()
 	speedRun = false;
 	speedRunCapable = false;
 	currentDir = North;
-	turn(LEFT);
-	delay(5000);
 }
 
 
 
 void loop()
 {
+	Serial.println(F("qqqqq"));
 	floodfill();
 	byte nextMove = nextStep();
-	Serial.println(nextMove);
+	Serial.println(F("RAAAA"));
 	
 	switch(nextMove)
 	{
@@ -472,8 +469,8 @@ void floodfill()
 {
 	int currentDistance;
 	
-	QueueArray<Cell> queue;
-	Cell cell;
+	QueueList<Cell*> queue;
+	Cell* cell;
 	boolean speedy;
 	
 	for(int i = 0; i < MAZE_LENGTH; i++)
@@ -487,20 +484,20 @@ void floodfill()
 	if (Goal == TO_START)
 	{
 		maze[0][0].distance = 0;
-		queue.push(maze[0][0]);
+		queue.push(&maze[0][0]);
 		speedy = false;
 	}
 	else
 	{
 		byte center = MAZE_LENGTH / 2;
 		maze[center][center].distance = 0;
-		queue.push(maze[center][center]);
+		queue.push(&maze[center][center]);
 		maze[center + 1][center].distance = 0;
-		queue.push(maze[center + 1][center]);
+		queue.push(&maze[center + 1][center]);
 		maze[center][center + 1].distance = 0;
-		queue.push(maze[center][center + 1]);
+		queue.push(&maze[center][center + 1]);
 		maze[center + 1][center + 1].distance = 0;
-		queue.push(maze[center + 1][center + 1]);
+		queue.push(&maze[center + 1][center + 1]);
 		if (speedRun && speedRunCapable)
 		{
 			speedy = true;
@@ -513,41 +510,41 @@ void floodfill()
 	while (!queue.isEmpty())
 	{
 		cell = queue.pop();
-		currentDistance = cell.distance;
-		byte x = cell.position >> SHIFT;
-		byte y = cell.position & Y_ONLY;
-
-		if (!(cell.data & ISNORTH))
+		currentDistance = cell->distance;
+		byte x = cell->position >> SHIFT;
+		byte y = cell->position & Y_ONLY;
+		Serial.println(queue.count());
+		if (!(cell->data & ISNORTH))
 		{
 			if (((currentDistance + 1) < getNeighborDistance(x, y, North)) && ( !speedy || getNeighborExplored(x, y, North)))
 			{
 				maze[y - 1][(x)].distance = currentDistance + 1;
-				queue.push(maze[y - 1][x]);
+				queue.push(&maze[y - 1][x]);
 			}
 		}
 
-		if (!(cell.data & ISSOUTH))
+		if (!(cell->data & ISSOUTH))
 		{
 			if (((currentDistance + 1) < getNeighborDistance(x, y, South)) && ( !speedy || getNeighborExplored(x, y, South)))
 			{
 				maze[(y) + 1][x].distance = currentDistance + 1;
-				queue.push(maze[(y) + 1][x]);
+				queue.push(&maze[(y) + 1][x]);
 			}
 		}
-		if (!(cell.data & ISWEST))
+		if (!(cell->data & ISWEST))
 		{
 			if (((currentDistance + 1) < getNeighborDistance(x, y, West)) && ( !speedy || getNeighborExplored(x, y, West)))
 			{
 				maze[y][x - 1].distance = currentDistance + 1;
-				queue.push(maze[y][x - 1]);
+				queue.push(&maze[y][x - 1]);
 			}
 		}
-		if (!(cell.data & ISEAST))
+		if (!(cell->data & ISEAST))
 		{
 			if (((currentDistance + 1) < getNeighborDistance(x, y, East)) && ( !speedy || getNeighborExplored(x, y, East)))
 			{
 				maze[y][x + 1].distance = currentDistance + 1;
-				queue.push(maze[y][x + 1]);
+				queue.push(&maze[y][x + 1]);
 			}
 		}
 	}
