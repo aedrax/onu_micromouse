@@ -44,10 +44,10 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>C:\Program Files (x86)\Arduino\hardware\arduino\avr\cores\arduino;C:\Program Files (x86)\Arduino\hardware\arduino\avr\variants\mega;C:\Users\p-sorensen\Documents\GitHub\Micromouse;C:\Program Files (x86)\Arduino\hardware\arduino\avr\libraries\Wire;C:\Program Files (x86)\Arduino\hardware\arduino\avr\libraries\Wire\utility;C:\Program Files (x86)\Arduino\libraries;C:\Program Files (x86)\Arduino\hardware\arduino\avr\libraries;C:\Program Files (x86)\Visual Micro\Visual Micro for Arduino\Micro Platforms\default\debuggers;C:\Users\p-sorensen\Documents\Arduino\libraries;c:\program files (x86)\arduino\hardware\tools\avr\avr\include\;c:\program files (x86)\arduino\hardware\tools\avr\avr\include\avr\;c:\program files (x86)\arduino\hardware\tools\avr\avr\;c:\program files (x86)\arduino\hardware\tools\avr\lib\gcc\avr\4.8.1\include\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <ForcedIncludeFiles>C:\Users\p-sorensen\Documents\GitHub\Micromouse\Visual Micro\.Micromouse.vsarduino.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+      <AdditionalIncludeDirectories>E:\Program Files (x86)\Arduino\hardware\arduino\avr\cores\arduino;E:\Program Files (x86)\Arduino\hardware\arduino\avr\variants\standard;E:\GitHub\onu_micromouse;E:\Program Files (x86)\Arduino\hardware\arduino\avr\libraries\Wire;E:\Program Files (x86)\Arduino\hardware\arduino\avr\libraries\Wire\utility;E:\Program Files (x86)\Arduino\libraries;E:\Program Files (x86)\Arduino\hardware\arduino\avr\libraries;E:\Program Files (x86)\Visual Micro\Visual Micro for Arduino\Micro Platforms\default\debuggers;C:\Users\Paul\Documents\Arduino\libraries;e:\program files (x86)\arduino\hardware\tools\avr\avr\include\;e:\program files (x86)\arduino\hardware\tools\avr\avr\include\avr\;e:\program files (x86)\arduino\hardware\tools\avr\avr\;e:\program files (x86)\arduino\hardware\tools\avr\lib\gcc\avr\4.8.1\include\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ForcedIncludeFiles>E:\GitHub\onu_micromouse\Visual Micro\.onu_micromouse.vsarduino.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
       <IgnoreStandardIncludePath>true</IgnoreStandardIncludePath>
-      <PreprocessorDefinitions>__AVR_ATmega2560__;ARDUINO=161;ARDUINO_MAIN;__AVR__;__avr__;F_CPU=16000000L;__cplusplus;GCC_VERSION=40801;ARDUINO_ARCH_AVR;ARDUINO_AVR_MEGA2560;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>__AVR_ATmega328p__;__AVR_ATmega328P__;ARDUINO=161;ARDUINO_MAIN;__AVR__;__avr__;F_CPU=16000000L;__cplusplus;GCC_VERSION=40801;ARDUINO_ARCH_AVR;ARDUINO_AVR_UNO;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -74,9 +74,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AnalogDistanceSensor.h">
-      <FileType>CppCode</FileType>
-    </ClInclude>
-    <ClInclude Include="Cell.h">
       <FileType>CppCode</FileType>
     </ClInclude>
     <ClInclude Include="CombinedDistanceSensors.h">
@@ -112,10 +109,12 @@
     <ClInclude Include="PololuWheelEncoders.h">
       <FileType>CppCode</FileType>
     </ClInclude>
+    <ClInclude Include="QueueArray.h" />
     <ClInclude Include="UltrasonicDistanceSensor.h">
       <FileType>CppCode</FileType>
     </ClInclude>
     <ClInclude Include="Visual Micro\.Micromouse.vsarduino.h" />
+    <ClInclude Include="Visual Micro\.onu_micromouse.vsarduino.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="AnalogDistanceSensor.cpp" />
