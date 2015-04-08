@@ -54,11 +54,15 @@ int forwardDistance;
 
 
 /* encoders stuff */
-#include "PololuWheelEncoders.h"
-#define ENCODER_LEFT_A A3
-#define ENCODER_LEFT_B A2
-#define ENCODER_RIGHT_A 4
-#define ENCODER_RIGHT_B 5
+//#include "PololuWheelEncoders.h"
+#include "Encoder.h"
+#define ENCODER_LEFT_A 18
+#define ENCODER_LEFT_B 19
+#define ENCODER_RIGHT_A 2
+#define ENCODER_RIGHT_B 3
+Encoder LeftWheelEncoder(ENCODER_LEFT_A, ENCODER_LEFT_B);
+Encoder RightWheelEncoder(ENCODER_RIGHT_A, ENCODER_RIGHT_B);
+
 #define WALL_THRESHOLD_FORWARD 5 //cm from the the front sensor to up to
 #define WALL_THRESHOLD_LEFT 7
 #define WALL_THRESHOLD_RIGHT 7
@@ -131,7 +135,8 @@ void setup()
 	leftMotor->setSpeed(30);
 	rightMotor->setSpeed(30);
 	
-	PololuWheelEncoders::init(ENCODER_LEFT_B, ENCODER_LEFT_A, ENCODER_RIGHT_B, ENCODER_RIGHT_A);
+	//PololuWheelEncoders::init(ENCODER_LEFT_B, ENCODER_LEFT_A, ENCODER_RIGHT_B, ENCODER_RIGHT_A);
+
 
 	irLeft.begin(LEFT_IR_PIN);
 	irRight.begin(RIGHT_IR_PIN);
@@ -139,8 +144,10 @@ void setup()
 
 	delay(5000);
 	
-	LEFT_ENCODER_TICKS_FORWARD = PololuWheelEncoders::getCountsAndResetM1();	
-	RIGHT_ENCODER_TICKS_FORWARD = PololuWheelEncoders::getCountsAndResetM2();
+	LEFT_ENCODER_TICKS_FORWARD = LeftWheelEncoder.read();//PololuWheelEncoders::getCountsAndResetM1();	
+	RIGHT_ENCODER_TICKS_FORWARD = RightWheelEncoder.read();//PololuWheelEncoders::getCountsAndResetM2();
+	LeftWheelEncoder.write(0);
+	RightWheelEncoder.write(0);
 
 	Serial.println(F("TICKS"));
 	Serial.println(LEFT_ENCODER_TICKS_FORWARD);
@@ -298,8 +305,11 @@ void driveStraight()
 		//motor power needs to change. For example, if the left motor is moving faster than the right, then this will come
 		//out as a positive number, meaning the right motor has to speed up.
 		//Reset the encoders every loop so we have a fresh value to use to calculate the error.
-		currentLeft = PololuWheelEncoders::getCountsAndResetM1();
-		currentRight = PololuWheelEncoders::getCountsAndResetM2();
+		currentLeft = LeftWheelEncoder.read();//PololuWheelEncoders::getCountsAndResetM1();
+		currentRight = RightWheelEncoder.read();//PololuWheelEncoders::getCountsAndResetM2();
+		LeftWheelEncoder.write(0);
+		RightWheelEncoder.write(0);
+
 		leftEncoder += currentLeft;
 		rightEncoder += currentRight;
 		error = currentLeft - currentRight;
@@ -353,8 +363,10 @@ void turn(int direction)
 	leftMotor->run((direction == LEFT) ? BACKWARD : FORWARD);
 	rightMotor->run((direction == LEFT) ? FORWARD : BACKWARD);
 
-	PololuWheelEncoders::getCountsAndResetM1();
-	PololuWheelEncoders::getCountsAndResetM2();
+	//PololuWheelEncoders::getCountsAndResetM1();
+	//PololuWheelEncoders::getCountsAndResetM2();
+	LeftWheelEncoder.write(0);
+	RightWheelEncoder.write(0);
 
 	rightEncoder = 0;
 	if(direction == LEFT)
@@ -364,7 +376,7 @@ void turn(int direction)
 		//right wheel is moving forward
 		while(rightEncoder < TURN_NUMBER_LEFT)
 		{
-			rightEncoder = PololuWheelEncoders::getCountsM2();
+			rightEncoder = RightWheelEncoder.read();//PololuWheelEncoders::getCountsM2();
 			Serial.println(rightEncoder);
 
 		}
@@ -375,7 +387,7 @@ void turn(int direction)
 
 		while(rightEncoder > TURN_NUMBER_RIGHT)
 		{
-			rightEncoder = PololuWheelEncoders::getCountsM2();
+			rightEncoder = RightWheelEncoder.read();//PololuWheelEncoders::getCountsM2();
 
 		}
 	}
