@@ -78,8 +78,8 @@ int RIGHT_ENCODER_TICKS_FORWARD;
 int leftEncoder;
 int rightEncoder;
 #define CHECK_DISTANCE_FORWARD 12 //centimeters forward
-#define CHECK_DISTANCE_LEFT 10
-#define CHECK_DISTANCE_RIGHT 10
+#define CHECK_DISTANCE_LEFT 15
+#define CHECK_DISTANCE_RIGHT 15
 
 
 #define ISNORTH 1		//0b00000001
@@ -87,6 +87,7 @@ int rightEncoder;
 #define ISSOUTH 4		//0b00000100
 #define ISWEST 8		//0b00001000
 #define ISEXPLORED 16	//0b00010000
+#define NOTEXPLORED 239 //0b11101111
 #define Y_ONLY 15		//0b00001111
 #define SHIFT 4 //shift 4 bits
 
@@ -142,7 +143,7 @@ void setup()
 	irRight.begin(RIGHT_IR_PIN);
 
 
-	delay(5000);
+	//delay(5000);
 	
 	LEFT_ENCODER_TICKS_FORWARD = LeftWheelEncoder.read();//PololuWheelEncoders::getCountsAndResetM1();	
 	RIGHT_ENCODER_TICKS_FORWARD = RightWheelEncoder.read();//PololuWheelEncoders::getCountsAndResetM2();
@@ -172,11 +173,16 @@ void setup()
 	}
 	
 	Goal = TO_CENTER;
-	Xpos = 0;
-	Ypos = 0;
+	Xpos = 1;
+	Ypos = 1;
 	speedRun = false;
 	speedRunCapable = false;
 	currentDir = North;
+	while (true)
+	{
+		driveStraight();
+	}
+	
 }
 
 
@@ -186,7 +192,9 @@ void loop()
 	Serial.println(F("qqqqq"));
 	floodfill();
 	byte nextMove = nextStep();
-	Serial.println(F("RAAAA"));
+	Serial.println(nextMove);
+	printMap();
+	
 	
 	switch(nextMove)
 	{
@@ -249,7 +257,7 @@ int getSonarDistance()
 		// Send the distance to the computer using Serial protocol, and
 		//turn LED OFF to indicate successful reading. 
 //Serial.println(HR_dist);
-		digitalWrite(LEDPin, LOW);
+		digitalWrite(LEDPin, LOW);		
 		return HR_dist;
 	}
 }
@@ -377,7 +385,7 @@ void turn(int direction)
 		while(rightEncoder < TURN_NUMBER_LEFT)
 		{
 			rightEncoder = RightWheelEncoder.read();//PololuWheelEncoders::getCountsM2();
-			Serial.println(rightEncoder);
+			//Serial.println(rightEncoder);
 
 		}
 	}
@@ -399,7 +407,18 @@ void turn(int direction)
 }
 
 
-
+void printMap()
+{
+	for (int i = 0; i < MAZE_LENGTH; i++)
+	{
+		for (int j = 0; j < MAZE_LENGTH; j++)
+		{
+			Serial.print(maze[i][j].distance);
+			Serial.print(" ");
+		}
+		Serial.println("");
+	}
+}
 
 
 
@@ -484,7 +503,7 @@ void floodfill()
 	QueueList<Cell*> queue;
 	Cell* cell;
 	boolean speedy;
-	
+	checkWalls();
 	for(int i = 0; i < MAZE_LENGTH; i++)
 	{
 		for(int j = 0; j < MAZE_LENGTH; j++)
@@ -502,14 +521,14 @@ void floodfill()
 	else
 	{
 		byte center = MAZE_LENGTH / 2;
+		maze[center - 1][center - 1].distance = 0;
+		queue.push(&maze[center - 1][center - 1]);
+		maze[center][center - 1].distance = 0;
+		queue.push(&maze[center][center - 1]);
+		maze[center - 1][center].distance = 0;
+		queue.push(&maze[center - 1][center]);
 		maze[center][center].distance = 0;
 		queue.push(&maze[center][center]);
-		maze[center + 1][center].distance = 0;
-		queue.push(&maze[center + 1][center]);
-		maze[center][center + 1].distance = 0;
-		queue.push(&maze[center][center + 1]);
-		maze[center + 1][center + 1].distance = 0;
-		queue.push(&maze[center + 1][center + 1]);
 		if (speedRun && speedRunCapable)
 		{
 			speedy = true;
@@ -519,19 +538,22 @@ void floodfill()
 			speedy = false;
 		}
 	}
+	
+	Serial.println(queue.isEmpty());
 	while (!queue.isEmpty())
 	{
 		cell = queue.pop();
 		currentDistance = cell->distance;
 		byte x = cell->position >> SHIFT;
 		byte y = cell->position & Y_ONLY;
-		Serial.println(queue.count());
+		x--;
+		y--;
 		if (!(cell->data & ISNORTH))
 		{
 			if (((currentDistance + 1) < getNeighborDistance(x, y, North)) && ( !speedy || getNeighborExplored(x, y, North)))
 			{
-				maze[y - 1][(x)].distance = currentDistance + 1;
-				queue.push(&maze[y - 1][x]);
+				maze[x][y - 1].distance = currentDistance + 1;
+				queue.push(&maze[x][y - 1]);
 			}
 		}
 
@@ -539,46 +561,43 @@ void floodfill()
 		{
 			if (((currentDistance + 1) < getNeighborDistance(x, y, South)) && ( !speedy || getNeighborExplored(x, y, South)))
 			{
-				maze[(y) + 1][x].distance = currentDistance + 1;
-				queue.push(&maze[(y) + 1][x]);
+				maze[x][y + 1].distance = currentDistance + 1;
+				queue.push(&maze[x][y + 1]);
 			}
 		}
 		if (!(cell->data & ISWEST))
 		{
 			if (((currentDistance + 1) < getNeighborDistance(x, y, West)) && ( !speedy || getNeighborExplored(x, y, West)))
 			{
-				maze[y][x - 1].distance = currentDistance + 1;
-				queue.push(&maze[y][x - 1]);
+				maze[x - 1][y].distance = currentDistance + 1;
+				queue.push(&maze[x - 1][y]);
 			}
 		}
 		if (!(cell->data & ISEAST))
 		{
 			if (((currentDistance + 1) < getNeighborDistance(x, y, East)) && ( !speedy || getNeighborExplored(x, y, East)))
 			{
-				maze[y][x + 1].distance = currentDistance + 1;
-				queue.push(&maze[y][x + 1]);
+				maze[x + 1][y].distance = currentDistance + 1;
+				queue.push(&maze[x + 1][y]);
 			}
 		}
 	}
-	/*
-	  MazeCell here = robotLocation.getCurrentLocation();
-      if (getDistance(here) == USELESS)
+	
+      if (maze[Xpos][Ypos].distance == useless)
       {
-         //System.out.println("Purging Knowledge");
-         maze.clearMaze();
+         Serial.println(F("Purging Knowledge"));
          speedRunCapable = false;
-         for (int i = 0; i < size.width; i++)
+         for (byte i = 0; i < MAZE_LENGTH; i++)
          {
-            for (int j = 0; j < size.height; j++)
+            for (byte j = 0; j < MAZE_LENGTH; j++)
             {
-               explored[i][j] = false;
+               maze[i][j].data &= NOTEXPLORED;
             }
          }
-         explored[here.getX() - 1][here.getY() - 1] = true;
+		 maze[Xpos - 1][Ypos - 1].data |= ISEXPLORED;
          checkWalls();
          floodfill();
       }
-      */
 }
 
 
@@ -588,10 +607,10 @@ byte nextStep()
 	byte nextDir;
 	if (moveQueue.isEmpty())
 	{
-		if (!(maze[Ypos][Xpos].data & ISEXPLORED))
+		if (!(maze[Xpos - 1][Ypos - 1].data & ISEXPLORED))
 		{
 			checkWalls();
-			maze[Ypos][Xpos].data | ISEXPLORED;
+			maze[Xpos - 1][Ypos - 1].data | ISEXPLORED;
 		}
 		if (atGoal())
 		{
@@ -624,6 +643,7 @@ byte nextStep()
 		else
 		{
 			next = Spin;
+			currentDir = getOpposite();
 			moveQueue.push(Forward);
 		}
 	}
@@ -638,34 +658,36 @@ byte nextStep()
 
 byte GetBestDirection()
 {
-	byte bestDis = maze[Ypos][Xpos].distance;
+	byte X = Xpos - 1;
+	byte Y = Ypos - 1;
+	byte bestDis = maze[X][Y].distance;
 	byte bestDir = 0;
-	if ((bestDis > getNeighborDistance(currentDir)) && !isWallAhead())
+	if ((bestDis > getNeighborDistance(X, Y, currentDir)) && !isWallAhead())
 	{
 		bestDir = currentDir;
 	}
 
-	if ((bestDis > getNeighborDistance(North)) && !getWall(North))
+	if ((bestDis > getNeighborDistance(X, Y, North)) && !getWall(North))
 	{
 		bestDir = North;
 	}
 
-	if ((bestDis > getNeighborDistance(East)) && !getWall(East))
+	if ((bestDis > getNeighborDistance(X, Y, East)) && !getWall(East))
 	{
 		bestDir = East;
 	}
 
-	if ((bestDis > getNeighborDistance(West)) && !getWall(West))
+	if ((bestDis > getNeighborDistance(X, Y, West)) && !getWall(West))
 	{
 		bestDir = West;
 	}
 
-	if ((bestDis > getNeighborDistance(South)) && !getWall(South))
+	if ((bestDis > getNeighborDistance(X, Y, South)) && !getWall(South))
 	{
 		bestDir = South;
 		
 	}
-	bestDis = getNeighborDistance(bestDir);
+	bestDis = getNeighborDistance(X, Y, bestDir);
 	if (bestDir = 0)
 	{
 		floodfill();
@@ -679,27 +701,27 @@ byte GetBestDirection()
 
 boolean getNeighborExplored(byte dir)
 {
-	return getNeighborExplored(Xpos, Ypos, dir);
+	return getNeighborExplored(Xpos - 1, Ypos - 1, dir);
 }
 
 boolean getNeighborExplored(byte X, byte Y, byte dir)
 {
 	boolean neighbor;
-	if ((dir == North) && (Y != 1))
+	if ((dir == North) && (Y != 0))
 	{
-		neighbor = (maze[Y - 1][X].data & ISEXPLORED);
+		neighbor = (maze[X][Y - 1].data & ISEXPLORED);
 	}
-	else if ((dir == South) && (Y != MAZE_LENGTH))
+	else if ((dir == South) && (Y != MAZE_LENGTH - 1))
 	{
-		neighbor = (maze[Y + 1][X].data & ISEXPLORED);
+		neighbor = (maze[X][Y + 1].data & ISEXPLORED);
 	}
-	else if ((dir == East) && (X != MAZE_LENGTH))
+	else if ((dir == East) && (X != MAZE_LENGTH - 1))
 	{
-		neighbor = (maze[Y][X + 1].data & ISEXPLORED);
+		neighbor = (maze[X + 1][Y].data & ISEXPLORED);
 	}
-	else if ((dir == West) && (X != 1))
+	else if ((dir == West) && (X != 0))
 	{
-		neighbor = (maze[Y][X - 1].data & ISEXPLORED);
+		neighbor = (maze[X - 1][Y].data & ISEXPLORED);
 	}
 	else
 	{
@@ -708,33 +730,24 @@ boolean getNeighborExplored(byte X, byte Y, byte dir)
 	return neighbor;
 }
 
- //
-   //  Returns the distance of the MazeCell adjacent to the passed MazeCell and
-    // is adjacent in the specified direction.
-//
-byte getNeighborDistance(byte dir)
-{
-	return getNeighborDistance(Xpos, Ypos, dir);
-}
-
 byte getNeighborDistance(byte X, byte Y, byte dir)
 {
 	byte neighborDis;
-	if ((dir == North) && (Ypos != 1))
+	if ((dir == North) && (Y != 0))
 	{
-		neighborDis = maze[Ypos - 1][Xpos].distance;
+		neighborDis = maze[X][Y - 1].distance;
 	}
-	else if ((dir == South) && (Ypos != MAZE_LENGTH))
+	else if ((dir == South) && (Y != MAZE_LENGTH - 1))
 	{
-		neighborDis = maze[Ypos + 1][Xpos].distance;
+		neighborDis = maze[X][Y + 1].distance;
 	}
-	else if ((dir == East) && (Xpos != MAZE_LENGTH))
+	else if ((dir == East) && (X != MAZE_LENGTH - 1))
 	{
-		neighborDis = maze[Ypos][Xpos + 1].distance;
+		neighborDis = maze[X + 1][Y].distance;
 	}
-	else if ((dir == West) && (Xpos != 1))
+	else if ((dir == West) && (X != 0))
 	{
-		neighborDis = maze[Ypos][Xpos - 1].distance;
+		neighborDis = maze[X - 1][Y].distance;
 	}
 	else
 	{
@@ -815,21 +828,23 @@ boolean getWall(byte dir)
 
 void checkWalls()
 {
+	byte X = Xpos - 1;
+	byte Y = Ypos - 1;
 	if (getWall(North))
 	{
-		maze[Ypos][Xpos].data | ISNORTH;
+		maze[X][Y].data | ISNORTH;
 	}
 	if (getWall(South))
 	{
-		maze[Ypos][Xpos].data | ISSOUTH;
+		maze[X][Y].data | ISSOUTH;
 	}
 	if (getWall(East))
 	{
-		maze[Ypos][Xpos].data | ISEAST;
+		maze[X][Y].data | ISEAST;
 	}
 	if (getWall(West))
 	{
-		maze[Ypos][Xpos].data | ISWEST;
+		maze[X][Y].data | ISWEST;
 	}
 }
 
@@ -838,7 +853,7 @@ boolean isWallAhead()
 	return getWall(currentDir);
 }
 
-int getLeft()
+byte getLeft()
 {
 	switch (currentDir)
 	{
@@ -853,7 +868,7 @@ int getLeft()
 	}
 }
 
-int getRight()
+byte getRight()
 {
 	switch (currentDir)
     {
@@ -868,6 +883,21 @@ int getRight()
   	}
 }
 
+byte getOpposite()
+{
+	switch (currentDir)
+	{
+	case North:
+		return South;
+	case East:
+		return West;
+	case South:
+		return North;
+	case West:
+		return East;
+	}
+}
+
 boolean atGoal()
 {
 	byte center = MAZE_LENGTH / 2;
@@ -875,7 +905,7 @@ boolean atGoal()
 	{
 		return true;
 	}
-	if ((Goal == TO_CENTER) && ((Xpos == center) || (Xpos == center + 1)) && ((Ypos == center) || (Ypos == center + 1)))
+	if ((Goal == TO_CENTER) && ((Xpos == center - 1) || (Xpos == center)) && ((Ypos == center - 1) || (Ypos == center)))
 	{
 		return true;
 	}

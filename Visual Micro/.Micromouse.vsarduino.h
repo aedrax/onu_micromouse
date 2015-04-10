@@ -102,6 +102,7 @@ extern "C" void __cxa_pure_virtual() {;}
 #include <PololuWheelEncoders.h>
 #include <QueueArray.h>
 #include <QueueList.h>
+#include <StackList.h>
 #include <UltrasonicDistanceSensor.cpp>
 #include <UltrasonicDistanceSensor.h>
 #include <direct_pin_read.h>
