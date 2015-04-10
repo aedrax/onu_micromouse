@@ -11,6 +11,7 @@
 #ifndef _VSARDUINO_H_
 #define _VSARDUINO_H_
 #define __AVR_ATmega2560__
+#define _VMDEBUG 1
 #define ARDUINO 161
 #define ARDUINO_MAIN
 #define __AVR__
@@ -85,6 +86,8 @@ extern "C" void __cxa_pure_virtual() {;}
 #include <Adafruit_PWMServoDriver.h>
 #include <AnalogDistanceSensor.cpp>
 #include <AnalogDistanceSensor.h>
+#include <Cell.h>
+#include <CellStack.h>
 #include <CombinedDistanceSensors.cpp>
 #include <CombinedDistanceSensors.h>
 #include <DistanceGP2Y0A41SK.cpp>

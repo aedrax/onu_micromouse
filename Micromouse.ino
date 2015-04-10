@@ -1,4 +1,6 @@
-#include "QueueList.h"
+#include "Cell.h"
+#include "CellStack.h"
+//#include "QueueList.h"
 //#include "QueueArray.h"
 #include <Wire.h>
 
@@ -63,6 +65,7 @@ int forwardDistance;
 Encoder LeftWheelEncoder(ENCODER_LEFT_A, ENCODER_LEFT_B);
 Encoder RightWheelEncoder(ENCODER_RIGHT_A, ENCODER_RIGHT_B);
 
+//wall_threshold is for driving and not hitting the wall
 #define WALL_THRESHOLD_FORWARD 5 //cm from the the front sensor to up to
 #define WALL_THRESHOLD_LEFT 7
 #define WALL_THRESHOLD_RIGHT 7
@@ -73,10 +76,12 @@ Encoder RightWheelEncoder(ENCODER_RIGHT_A, ENCODER_RIGHT_B);
 #define TURN_CORRECTION_DELAY 50 //delay to turn for error in milliseconds
 #define LEFT 0
 #define RIGHT 1
+#define BEHIND 2
 int LEFT_ENCODER_TICKS_FORWARD;
 int RIGHT_ENCODER_TICKS_FORWARD;
 int leftEncoder;
 int rightEncoder;
+//check distance is to know if the wall is in the cell or not
 #define CHECK_DISTANCE_FORWARD 12 //centimeters forward
 #define CHECK_DISTANCE_LEFT 15
 #define CHECK_DISTANCE_RIGHT 15
@@ -91,40 +96,16 @@ int rightEncoder;
 #define Y_ONLY 15		//0b00001111
 #define SHIFT 4 //shift 4 bits
 
-struct Cell
-{
-	//byte x;
-	//byte y;
-	byte position; //positions are stored as0bXXXXYYYY
-	byte distance;
-	byte data;
-};
+#include "Cell.h"
 
 //#include "QueueArray.h"
 
-#define MAZE_LENGTH 16
+#define MAZE_LENGTH 12
 Cell maze[MAZE_LENGTH][MAZE_LENGTH];
-bool turbo = false;
-QueueList<byte> moveQueue;
-byte useless = 255;
-bool TO_CENTER = true;
-bool TO_START = false;
-bool Goal;
-byte Xpos, Ypos;
-#define North 1
-#define East 2
-#define West 3
-#define South 4
-#define Forward 1
-#define RotateLeft 2
-#define RotateRight 3
-#define Spin 4
-byte currentDir;
-bool speedRun, speedRunCapable;
-
-
-
-
+Cell* currentCell;
+CellStack stack;
+byte currentDirection;
+#define USELESS 255
 
 void setup()
 {
@@ -159,29 +140,41 @@ void setup()
 	pinMode(LEDPin, OUTPUT); // Use LED indicator (if required)
 
 	
-	for(byte i = 0; i < MAZE_LENGTH; i++)
+	for (byte y = 0; y < MAZE_LENGTH; y++)
 	{
-		for(byte j = 0; j < MAZE_LENGTH; j++)
+		for(byte x = 0; x < MAZE_LENGTH; x++)
 		{
 		
-			maze[i][j].position = ((j + 1) << SHIFT); //x position
-			maze[i][j].position |= (i + 1);//y position
-			maze[i][j].distance = useless;
-			maze[i][j].data = 0x00;
+			maze[x][y].position = (x << SHIFT); //x position
+			maze[x][y].position |= (y);//y position
+			maze[x][y].data = 0x00;
 			
 		}
 	}
-	
-	Goal = TO_CENTER;
-	Xpos = 1;
-	Ypos = 1;
-	speedRun = false;
-	speedRunCapable = false;
-	currentDir = North;
-	while (true)
+	//fill the distances
+	byte half = MAZE_LENGTH / 2;
+	for (byte y = 0; y < half; y++)
 	{
-		driveStraight();
+		for (byte x = 0; x < half; x++)
+		{
+			byte m = MAZE_LENGTH - 2 - x - y;
+			maze[x][y].distance = m;
+			maze[MAZE_LENGTH - 1 - x][y].distance = m;
+			maze[MAZE_LENGTH - 1 - x][MAZE_LENGTH - 1 - y].distance = m;
+			maze[x][MAZE_LENGTH - 1 - y].distance = m;
+		}
 	}
+	printMap();
+	currentDirection = ISNORTH;
+	currentCell = &maze[0][0];
+	currentCell->data |= ISEAST;
+	currentCell->data |= ISWEST;
+	currentCell->data |= ISSOUTH;
+	currentCell->data |= ISEXPLORED;
+	stack.push(currentCell);
+	bool canMove = !(currentCell->data & currentDirection); 
+	bool better = currentCell->distance > getCellDistance(currentDirection);
+	bool isExplored = !getIsCellExplored(currentDirection);
 	
 }
 
@@ -189,32 +182,11 @@ void setup()
 
 void loop()
 {
-	Serial.println(F("qqqqq"));
-	floodfill();
-	byte nextMove = nextStep();
-	Serial.println(nextMove);
-	printMap();
+	while (currentCell->distance == 0);
+	updateWalls();
+	byte moveDirection = getBestDirection();
+	move(moveDirection);
 	
-	
-	switch(nextMove)
-	{
-		
-		case Forward:
-			driveStraight();
-			break;
-		case RotateRight:
-			turn(RIGHT);
-			break;
-		case RotateLeft:
-			turn(LEFT);
-			break;
-		case Spin:
-			turn(LEFT);
-			turn(LEFT);
-			break;
-		default:
-			stop();
-	}
 }
 
 void stop()
@@ -288,12 +260,18 @@ void driveStraight()
 	int currentLeft;
 	int currentRight;
 	bool isCloseToWall = false;
-	forwardDistance = getSonarDistance();
-	int goalDistance = forwardDistance - CHECK_DISTANCE_FORWARD;
+	
+	
+
+
+
+
+	
 
 	//while the robot has not moved forward one cell
 	while(true)
 	{
+		forwardDistance = getSonarDistance();
 		leftIR = irLeft.getDistanceCentimeter();
 		rightIR = irRight.getDistanceCentimeter();
 
@@ -331,10 +309,7 @@ void driveStraight()
 		//Makes the loop repeat ten times a second. If it repeats too much we lose accuracy due to the fact that we don't have
 		//access to floating point math, however if it repeats to little the proportional algorithm will not be as effective.
 		//Keep in mind that if this value is changed, kp must change accordingly.
-		delay(100);
-		forwardDistance = getSonarDistance();
-		if(forwardDistance < goalDistance && leftEncoder >= LEFT_ENCODER_TICKS_FORWARD && rightEncoder >= RIGHT_ENCODER_TICKS_FORWARD)
-			break;
+		delay(100);		
 	}
 	if(isCloseToWall)
 	{
@@ -404,6 +379,7 @@ void turn(int direction)
 	rightMotor->run(RELEASE);
 	//delay half a second
 	delay(500);
+	currentDirection = getDirection(direction);
 }
 
 
@@ -425,489 +401,244 @@ void printMap()
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/////////floodfill
-
-void floodfill()
+void updateWalls()
 {
-	int currentDistance;
-	
-	QueueList<Cell*> queue;
-	Cell* cell;
-	boolean speedy;
-	checkWalls();
-	for(int i = 0; i < MAZE_LENGTH; i++)
+	if (getSonarDistance() <= WALL_THRESHOLD_FORWARD)
 	{
-		for(int j = 0; j < MAZE_LENGTH; j++)
+		updateWall(currentDirection);
+	}
+	if (irLeft.getDistanceCentimeter() <= WALL_THRESHOLD_LEFT)
+	{
+		updateWall(getDirection(LEFT));
+	}
+	if (irRight.getDistanceCentimeter() <= WALL_THRESHOLD_RIGHT)
+	{
+		updateWall(getDirection(RIGHT));
+	}
+}
+
+void updateWall(byte direction)
+{
+	currentCell->data |= direction;
+}
+
+byte getDirection(byte direction)
+{
+	if (direction == LEFT)
+	{
+		switch (currentDirection)
 		{
-			maze[i][j].distance = useless;
+			case ISNORTH:
+				return ISWEST;
+			case ISEAST:
+				return ISNORTH;
+			case ISSOUTH:
+				return ISEAST;
+			case ISWEST:
+				return ISSOUTH;
 		}
 	}
-	
-	if (Goal == TO_START)
+	else if (direction == RIGHT)
 	{
-		maze[0][0].distance = 0;
-		queue.push(&maze[0][0]);
-		speedy = false;
-	}
-	else
-	{
-		byte center = MAZE_LENGTH / 2;
-		maze[center - 1][center - 1].distance = 0;
-		queue.push(&maze[center - 1][center - 1]);
-		maze[center][center - 1].distance = 0;
-		queue.push(&maze[center][center - 1]);
-		maze[center - 1][center].distance = 0;
-		queue.push(&maze[center - 1][center]);
-		maze[center][center].distance = 0;
-		queue.push(&maze[center][center]);
-		if (speedRun && speedRunCapable)
+		switch (currentDirection)
 		{
-			speedy = true;
+			case ISNORTH:
+				return ISEAST;
+			case ISEAST:
+				return ISSOUTH;
+			case ISSOUTH:
+				return ISWEST;
+			case ISWEST:
+				return ISNORTH;
 		}
-		else
+	}	
+	else//turn around
+	{
+		switch (currentDirection)
 		{
-			speedy = false;
+		case ISNORTH:
+			return ISSOUTH;
+		case ISEAST:
+			return ISWEST;
+		case ISSOUTH:
+			return ISNORTH;
+		case ISWEST:
+			return ISEAST;
 		}
 	}
-	
-	Serial.println(queue.isEmpty());
-	while (!queue.isEmpty())
+}
+
+byte getBestDirection()
+{
+	//if the cell ahead of the robot is open and the distance is shorter than
+	//the current distance, and hasn't been explored go there
+	if (!(currentCell->data & currentDirection) && currentCell->distance > getCellDistance(currentDirection) && !getIsCellExplored(currentDirection))
 	{
-		cell = queue.pop();
-		currentDistance = cell->distance;
-		byte x = cell->position >> SHIFT;
-		byte y = cell->position & Y_ONLY;
-		x--;
+		return currentDirection;
+	}
+
+	//if the cell to the right is open and the distance is shorter than the current distance, and hasn't been explored go there
+	if (!(currentCell->data & getDirection(RIGHT)) && currentCell->distance > getCellDistance(getDirection(RIGHT)) && !getIsCellExplored(currentDirection))
+	{
+		return getDirection(RIGHT);
+	}
+
+	//if the cell to the left is open and the distance is shorter than the current distance, and hasn't been explored go there
+	if (!(currentCell->data & getDirection(LEFT)) && currentCell->distance > getCellDistance(getDirection(LEFT)) && !getIsCellExplored(currentDirection))
+	{
+		return getDirection(LEFT);
+	}
+
+	//if the cell ahead of the robot is open and the distance is shorter than
+	//the current distance, go there
+	if (!(currentCell->data & currentDirection) && currentCell->distance > getCellDistance(currentDirection))
+	{
+		return currentDirection;
+	}
+
+	//if the cell to the right is open and the distance is shorter than the current distance, go there
+	if (!(currentCell->data & getDirection(RIGHT)) && currentCell->distance > getCellDistance(getDirection(RIGHT)))
+	{
+		return getDirection(RIGHT);
+	}
+
+	//if the cell to the left is open and the distance is shorter than the current distance, go there
+	if (!(currentCell->data & getDirection(LEFT)) && currentCell->distance > getCellDistance(getDirection(LEFT)))
+	{
+		return getDirection(LEFT);
+	}
+
+	//if the cell ahead of the robot is open go there
+	if (!(currentCell->data & currentDirection) && currentCell->distance > getCellDistance(currentDirection))
+	{
+		return currentDirection;
+	}
+
+	//if the cell to the right is open go there
+	if (!(currentCell->data & getDirection(RIGHT)) && currentCell->distance > getCellDistance(getDirection(RIGHT)))
+	{
+		return getDirection(RIGHT);
+	}
+
+	//if the cell to the left is open go there
+	if (!(currentCell->data & getDirection(LEFT)) && currentCell->distance > getCellDistance(getDirection(LEFT)))
+	{
+		return getDirection(LEFT);
+	}
+	
+	return getDirection(BEHIND);
+}
+bool getIsCellExplored(byte direction)
+{
+	byte x = (currentCell->position >> SHIFT);
+	byte y = (currentCell->position & Y_ONLY);
+	switch (direction)
+	{
+	case ISNORTH:
+		y++;
+		break;
+	case ISEAST:
+		x++;
+		break;
+	case ISSOUTH:
 		y--;
-		if (!(cell->data & ISNORTH))
-		{
-			if (((currentDistance + 1) < getNeighborDistance(x, y, North)) && ( !speedy || getNeighborExplored(x, y, North)))
-			{
-				maze[x][y - 1].distance = currentDistance + 1;
-				queue.push(&maze[x][y - 1]);
-			}
-		}
-
-		if (!(cell->data & ISSOUTH))
-		{
-			if (((currentDistance + 1) < getNeighborDistance(x, y, South)) && ( !speedy || getNeighborExplored(x, y, South)))
-			{
-				maze[x][y + 1].distance = currentDistance + 1;
-				queue.push(&maze[x][y + 1]);
-			}
-		}
-		if (!(cell->data & ISWEST))
-		{
-			if (((currentDistance + 1) < getNeighborDistance(x, y, West)) && ( !speedy || getNeighborExplored(x, y, West)))
-			{
-				maze[x - 1][y].distance = currentDistance + 1;
-				queue.push(&maze[x - 1][y]);
-			}
-		}
-		if (!(cell->data & ISEAST))
-		{
-			if (((currentDistance + 1) < getNeighborDistance(x, y, East)) && ( !speedy || getNeighborExplored(x, y, East)))
-			{
-				maze[x + 1][y].distance = currentDistance + 1;
-				queue.push(&maze[x + 1][y]);
-			}
-		}
+		break;
+	case ISWEST:
+		x--;
+		break;
 	}
-	
-      if (maze[Xpos][Ypos].distance == useless)
-      {
-         Serial.println(F("Purging Knowledge"));
-         speedRunCapable = false;
-         for (byte i = 0; i < MAZE_LENGTH; i++)
-         {
-            for (byte j = 0; j < MAZE_LENGTH; j++)
-            {
-               maze[i][j].data &= NOTEXPLORED;
-            }
-         }
-		 maze[Xpos - 1][Ypos - 1].data |= ISEXPLORED;
-         checkWalls();
-         floodfill();
-      }
+	return maze[x][y].data & ISEXPLORED;
+}
+byte getCellDistance(byte direction)
+{
+	byte x = (currentCell->position >> SHIFT);
+	byte y = (currentCell->position & Y_ONLY);
+	switch (direction)
+	{
+		case ISNORTH:
+			y++;
+			if (y == MAZE_LENGTH)
+			{
+				return USELESS;
+			}
+			break;
+		case ISEAST:
+			x++;
+			if (x == MAZE_LENGTH)
+			{
+				return USELESS;
+			}
+			break;
+		case ISSOUTH:
+			if (y == 0)
+			{
+				return USELESS;
+			}
+			y--;
+			break;
+		case ISWEST:
+			if (x == 0)
+			{
+				return USELESS;
+			}
+			x--;
+			break;
+	}
+	return maze[x][y].distance;
 }
 
-
-byte nextStep()
+void move(byte direction)
 {
-	byte next;
-	byte nextDir;
-	if (moveQueue.isEmpty())
+	if (currentDirection != direction)
 	{
-		if (!(maze[Xpos - 1][Ypos - 1].data & ISEXPLORED))
+		if (getDirection(LEFT) == direction)
 		{
-			checkWalls();
-			maze[Xpos - 1][Ypos - 1].data | ISEXPLORED;
+			turn(LEFT);
 		}
-		if (atGoal())
+		else if (getDirection(RIGHT) == direction)
 		{
-			if((Goal == TO_CENTER) && speedRunCapable == false)
-			{
-				speedRunCapable = true;
-				//blockOutCenter();
-			}
-			Goal = !Goal;
-			floodfill();
-		}
-		nextDir = GetBestDirection();
-		turbo = getNeighborExplored(nextDir);
-		if (nextDir == currentDir)
-		{
-			next = Forward;
-		}
-		else if (nextDir == getLeft())
-		{
-			next = RotateLeft;
-			currentDir = getLeft();
-			moveQueue.push(Forward);
-		}
-		else if (nextDir == getRight())
-		{
-			next = RotateRight;
-			currentDir = getRight();
-			moveQueue.push(Forward);
+			turn(RIGHT);
 		}
 		else
 		{
-			next = Spin;
-			currentDir = getOpposite();
-			moveQueue.push(Forward);
+			//turn around
+			turn(LEFT);
+			turn(LEFT);
 		}
 	}
-	else
+	int goalDistance = forwardDistance - CHECK_DISTANCE_FORWARD;
+	while (forwardDistance < goalDistance && leftEncoder >= LEFT_ENCODER_TICKS_FORWARD && rightEncoder >= RIGHT_ENCODER_TICKS_FORWARD)
 	{
-		next = moveQueue.pop();
-	}
-	return next;
-}
+		driveStraight();
+	}		
+	stop();
 
-
-
-byte GetBestDirection()
-{
-	byte X = Xpos - 1;
-	byte Y = Ypos - 1;
-	byte bestDis = maze[X][Y].distance;
-	byte bestDir = 0;
-	if ((bestDis > getNeighborDistance(X, Y, currentDir)) && !isWallAhead())
+	byte x = (currentCell->position >> SHIFT);
+	byte y = (currentCell->position & Y_ONLY);
+	switch (currentDirection)
 	{
-		bestDir = currentDir;
-	}
-
-	if ((bestDis > getNeighborDistance(X, Y, North)) && !getWall(North))
-	{
-		bestDir = North;
-	}
-
-	if ((bestDis > getNeighborDistance(X, Y, East)) && !getWall(East))
-	{
-		bestDir = East;
-	}
-
-	if ((bestDis > getNeighborDistance(X, Y, West)) && !getWall(West))
-	{
-		bestDir = West;
-	}
-
-	if ((bestDis > getNeighborDistance(X, Y, South)) && !getWall(South))
-	{
-		bestDir = South;
-		
-	}
-	bestDis = getNeighborDistance(X, Y, bestDir);
-	if (bestDir = 0)
-	{
-		floodfill();
-		return GetBestDirection();
-	}
-	else
-	{
-		return bestDir;
-	}
-}
-
-boolean getNeighborExplored(byte dir)
-{
-	return getNeighborExplored(Xpos - 1, Ypos - 1, dir);
-}
-
-boolean getNeighborExplored(byte X, byte Y, byte dir)
-{
-	boolean neighbor;
-	if ((dir == North) && (Y != 0))
-	{
-		neighbor = (maze[X][Y - 1].data & ISEXPLORED);
-	}
-	else if ((dir == South) && (Y != MAZE_LENGTH - 1))
-	{
-		neighbor = (maze[X][Y + 1].data & ISEXPLORED);
-	}
-	else if ((dir == East) && (X != MAZE_LENGTH - 1))
-	{
-		neighbor = (maze[X + 1][Y].data & ISEXPLORED);
-	}
-	else if ((dir == West) && (X != 0))
-	{
-		neighbor = (maze[X - 1][Y].data & ISEXPLORED);
-	}
-	else
-	{
-		neighbor = false;
-	}
-	return neighbor;
-}
-
-byte getNeighborDistance(byte X, byte Y, byte dir)
-{
-	byte neighborDis;
-	if ((dir == North) && (Y != 0))
-	{
-		neighborDis = maze[X][Y - 1].distance;
-	}
-	else if ((dir == South) && (Y != MAZE_LENGTH - 1))
-	{
-		neighborDis = maze[X][Y + 1].distance;
-	}
-	else if ((dir == East) && (X != MAZE_LENGTH - 1))
-	{
-		neighborDis = maze[X + 1][Y].distance;
-	}
-	else if ((dir == West) && (X != 0))
-	{
-		neighborDis = maze[X - 1][Y].distance;
-	}
-	else
-	{
-		neighborDis = useless;
-	}
-	return neighborDis;
-}
-
-boolean getWall(byte dir)
-{
-	switch(currentDir)
-	{
-		case North:
+		case ISNORTH:
+			y++;
 			break;
-		case East:
-			switch(dir)
-			{
-				case North:
-					dir = West;
-					break;
-				case East:
-					dir = North;
-					break;
-				case South:
-					dir = East;
-					break;
-				case West:
-					dir = South;
-					break;
-			}
+		case ISEAST:
+			x++;			
 			break;
-		case South:
-			switch(dir)
-			{
-				case North:
-					dir = South;
-					break;
-				case East:
-					dir = West;
-					break;
-				case South:
-					dir = North;
-					break;
-				case West:
-					dir = East;
-					break;
-			}
+		case ISSOUTH:
+			y--;
 			break;
-		case West:
-			switch(dir)
-			{
-				case North:
-					dir = East;
-					break;
-				case East:
-					dir = South;
-					break;
-				case South:
-					dir = West;
-					break;
-				case West:
-					dir = North;
-					break;
-			}
+		case ISWEST:
+			x--;
 			break;
 	}
-	switch(dir)
+	currentCell = &maze[x][y];
+	if (stack.contains(currentCell))
 	{
-		case North:
-			return (getSonarDistance() < CHECK_DISTANCE_FORWARD);
-		case East:
-			return (irRight.getDistanceCentimeter() < CHECK_DISTANCE_RIGHT);
-		case West:
-			return (irLeft.getDistanceCentimeter() < CHECK_DISTANCE_LEFT);
+		Cell* temp;
+		//keep popping cell off stack untill it finds the cell and put it back on
+		//this gets rid of the unneccessary cells like in a dead end
+		//I am pretty sure I spelled ^ wrong
+		while (stack.pop() != currentCell);
 	}
-	return false;
-}
-
-void checkWalls()
-{
-	byte X = Xpos - 1;
-	byte Y = Ypos - 1;
-	if (getWall(North))
-	{
-		maze[X][Y].data | ISNORTH;
-	}
-	if (getWall(South))
-	{
-		maze[X][Y].data | ISSOUTH;
-	}
-	if (getWall(East))
-	{
-		maze[X][Y].data | ISEAST;
-	}
-	if (getWall(West))
-	{
-		maze[X][Y].data | ISWEST;
-	}
-}
-
-boolean isWallAhead()
-{
-	return getWall(currentDir);
-}
-
-byte getLeft()
-{
-	switch (currentDir)
-	{
-		case North :
-			return West;
-		case East :
-			return North;
-		case South :
-			return East;
-		case West :
-			return South;
-	}
-}
-
-byte getRight()
-{
-	switch (currentDir)
-    {
-    	case North :
-            return East;
-        case East :
-            return South;
-        case South :
-            return West;
-        case West :
-            return North;
-  	}
-}
-
-byte getOpposite()
-{
-	switch (currentDir)
-	{
-	case North:
-		return South;
-	case East:
-		return West;
-	case South:
-		return North;
-	case West:
-		return East;
-	}
-}
-
-boolean atGoal()
-{
-	byte center = MAZE_LENGTH / 2;
-	if ((Goal == TO_START) && (Xpos == 1) && (Ypos == MAZE_LENGTH))
-	{
-		return true;
-	}
-	if ((Goal == TO_CENTER) && ((Xpos == center - 1) || (Xpos == center)) && ((Ypos == center - 1) || (Ypos == center)))
-	{
-		return true;
-	}
-	return false;
+	currentCell->data |= ISEXPLORED;
+	stack.push(currentCell);
 }

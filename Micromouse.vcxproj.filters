@@ -75,6 +75,15 @@
     <ClInclude Include="QueueList.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="StackList.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="CellStack.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Cell.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="AnalogDistanceSensor.cpp">
