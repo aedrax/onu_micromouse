@@ -58,10 +58,10 @@ int forwardDistance;
 /* encoders stuff */
 //#include "PololuWheelEncoders.h"
 #include "Encoder.h"
-#define ENCODER_LEFT_A 18
-#define ENCODER_LEFT_B 19
-#define ENCODER_RIGHT_A 2
-#define ENCODER_RIGHT_B 3
+#define ENCODER_LEFT_A A3
+#define ENCODER_LEFT_B A2
+#define ENCODER_RIGHT_A 4
+#define ENCODER_RIGHT_B 5
 Encoder LeftWheelEncoder(ENCODER_LEFT_A, ENCODER_LEFT_B);
 Encoder RightWheelEncoder(ENCODER_RIGHT_A, ENCODER_RIGHT_B);
 
