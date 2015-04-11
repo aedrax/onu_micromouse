@@ -96,10 +96,6 @@ int rightEncoder;
 #define Y_ONLY 15		//0b00001111
 #define SHIFT 4 //shift 4 bits
 
-#include "Cell.h"
-
-//#include "QueueArray.h"
-
 #define MAZE_LENGTH 12
 Cell maze[MAZE_LENGTH][MAZE_LENGTH];
 Cell* currentCell;
