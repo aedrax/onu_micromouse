@@ -1,17 +1,3 @@
-#include "Cell.h"
-#include "CellStack.h"
-//#include "QueueList.h"
-//#include "QueueArray.h"
-#include <Wire.h>
-
-
-
-
-
-
-
-
-
 /* Define pins for HC-SR04 ultrasonic sensor */
 #define echoPin 6 // Echo Pin = Analog Pin 0
 #define trigPin 7 // Trigger Pin = Analog Pin 1
@@ -22,17 +8,12 @@ byte minimumRange = 5; //Minimum Sonar range
 int maximumRange = 400; //Maximum Sonar Range
 
 
-
-
-
-
-
+#include <Wire.h>//needed for the MotorShield
 #include "Adafruit_MotorShield.h"
 /* Using the motor shield */
-Adafruit_MotorShield AFMS = Adafruit_MotorShield();
-Adafruit_DCMotor *rightMotor = AFMS.getMotor(1);
-Adafruit_DCMotor *leftMotor = AFMS.getMotor(2);
-#define FORWARD_SPEED 40
+Adafruit_MotorShield AFMS = Adafruit_MotorShield(); //the AdaFruit motorshield object
+Adafruit_DCMotor *rightMotor = AFMS.getMotor(1);    //pointer to the right motor
+Adafruit_DCMotor *leftMotor = AFMS.getMotor(2);     //pointer to the left motor
 
 
 
@@ -40,13 +21,13 @@ Adafruit_DCMotor *leftMotor = AFMS.getMotor(2);
 /* get the distances for the for the IR sensors */
 #include "DistanceGP2Y0A41SK.h"
 
-DistanceGP2Y0A41SK irLeft;
-DistanceGP2Y0A41SK irRight;
+DistanceGP2Y0A41SK leftIrSensor;  //the analog IR sensor on the left side
+DistanceGP2Y0A41SK rightIrSensor; //the analog IR sensor on the right side
 #define LEFT_IR_PIN A0
 #define RIGHT_IR_PIN A1
-byte leftIR;
-byte rightIR;
-int forwardDistance;
+byte leftIrSensorValue;    //placeholder for the distance of the left IR sensor
+byte rightIrSensorValue;         //placeholder for the distance of the right IR sensor
+int forwardDistance;       //placeholder for the distance ahead of the robot, potentially used to find distance traveled
 
 
 
@@ -56,98 +37,98 @@ int forwardDistance;
 
 
 /* encoders stuff */
-//#include "PololuWheelEncoders.h"
-#include "Encoder.h"
+#include "PololuWheelEncoders.h" //Does not work with Arduino Mega
+//#include "Encoder.h" //used when trying the Arduino Mega
 #define ENCODER_LEFT_A A3
 #define ENCODER_LEFT_B A2
 #define ENCODER_RIGHT_A 4
 #define ENCODER_RIGHT_B 5
-Encoder LeftWheelEncoder(ENCODER_LEFT_A, ENCODER_LEFT_B);
-Encoder RightWheelEncoder(ENCODER_RIGHT_A, ENCODER_RIGHT_B);
+//The Encoders are implimented when using an Arduino Mega
+//Encoder LeftWheelEncoder(ENCODER_LEFT_A, ENCODER_LEFT_B);
+//Encoder RightWheelEncoder(ENCODER_RIGHT_A, ENCODER_RIGHT_B);
 
-//wall_threshold is for driving and not hitting the wall
-#define WALL_THRESHOLD_FORWARD 5 //cm from the the front sensor to up to
-#define WALL_THRESHOLD_LEFT 7
-#define WALL_THRESHOLD_RIGHT 7
-#define TURN_NUMBER_LEFT 14 //number the encoder should check when turning left
-#define TURN_NUMBER_RIGHT -17 //number the encoder should check when turning right
-#define TURN_SPEED  30 //speed for turning
-#define TURN_CORRECTION 30 //speed to turn one wheel on correction
-#define TURN_CORRECTION_DELAY 50 //delay to turn for error in milliseconds
-#define LEFT 0
-#define RIGHT 1
-#define BEHIND 2
-int LEFT_ENCODER_TICKS_FORWARD;
-int RIGHT_ENCODER_TICKS_FORWARD;
-int leftEncoder;
-int rightEncoder;
+#define FORWARD_SPEED 40 //speed of the motors when driving straight out of 255
+
+//wall_threshold is the distances to check when driving to make sure the robot doesn't drive into the wall
+#define WALL_THRESHOLD_FORWARD 7 //cm from the front sensor the robot can get
+#define WALL_THRESHOLD_LEFT 7    //cm from the left IR sensor the robot can get
+#define WALL_THRESHOLD_RIGHT 7   //cm from the right IR sensor the robot can get
+#define TURN_NUMBER_LEFT 14      //When turning Left the encoder of the right wheel is about this when reaching 90 degrees
+#define TURN_NUMBER_RIGHT -17    //When turning Right the encoder of the right wheel is about this when reaching 90 degrees
+#define TURN_SPEED  30           //speed for turning the robot
+#define TURN_CORRECTION 30       //speed to turn one wheel when correcting the robot
+#define TURN_CORRECTION_DELAY 40 //length in milliseconds to correct motors when driving toward walls, higer value is a sharper turn
+#define LEFT 0                   //for things like turning LEFT or what cell is LEFT of the robot
+#define RIGHT 1                  //for things like turning RIGHT or what cell is RIGHT of the robot
+#define OPPOSITE 2               //for things like turning OPPOSITE or what cell is OPPOSITE of the direction the robot is facing
+int LEFT_ENCODER_TICKS_FORWARD = 40;//number of ticks the left encoder must go to traverse one cell
+int RIGHT_ENCODER_TICKS_FORWARD = 40;//number of ticks the right encoder must go to travers one cell
+int leftEncoderValue;            //placeholder of the value of the left encoder
+int rightEncoderValue;           //placeholder of the value of the right encoder
+
 //check distance is to know if the wall is in the cell or not
-#define CHECK_DISTANCE_FORWARD 12 //centimeters forward
-#define CHECK_DISTANCE_LEFT 15
-#define CHECK_DISTANCE_RIGHT 15
+//i.e. if there is something whithin this range, mark it as there being a wall there
+#define CHECK_DISTANCE_FORWARD 10 //centimeters forward
+#define CHECK_DISTANCE_LEFT 10    //centimeters from the left IR sensor
+#define CHECK_DISTANCE_RIGHT 10   //centimeters from the right IR sensor
 
+#include "Cell.h"      //Describes a 'Cell' of the maze
+#include "CellStack.h" //Stack of Cells which is the final path of the mouse
 
-#define ISNORTH 1		//0b00000001
-#define ISEAST 2		//0b00000010
-#define ISSOUTH 4		//0b00000100
-#define ISWEST 8		//0b00001000
-#define ISEXPLORED 16	//0b00010000
-#define NOTEXPLORED 239 //0b11101111
-#define Y_ONLY 15		//0b00001111
-#define SHIFT 4 //shift 4 bits
+//to save memory, bitwise techniques are used so individual bits of the data byte in a Cell
+//can be used like booleans, simply use '&' to see if it is true
+//i.e. if a cell has a north wall, saying cell.data & IS_NORTH would return true
+#define IS_NORTH 1	    //0b00000001 if a cell has a wall on the north end
+#define IS_EAST 2	    //0b00000010 if a cell has a wall on the east end
+#define IS_SOUTH 4	    //0b00000100 if a cell has a wall on the south end
+#define IS_WEST 8      	    //0b00001000 if a cell has a wall on the west end
+#define IS_EXPLORED 16	    //0b00010000 if a cell has been explored already
+//the position byte of a cell contains both the X and the Y position
+//the first four bits are for X and the other four are for Y i.e. 0bXXXXYYYY
+#define Y_ONLY 15	    //0b00001111 when bitwise & is used, it returns only the Y value of the position
+#define X_SHIFT 4           //X_SHIFT 4 bits for X location
 
-#define MAZE_LENGTH 12
+#define MAZE_LENGTH 16      //the number of cells the maze is in each direction
+//the memory hog, an array of cells to hold all the information about the maze
 Cell maze[MAZE_LENGTH][MAZE_LENGTH];
-Cell* currentCell;
-CellStack stack;
-byte currentDirection;
-#define USELESS 255
+Cell* currentCell;          //pointer to the current cell the robot is in
+CellStack stack;            //the stack of cells which in the end will be the path the robot takes start to finish
+byte currentDirection;      //the current direction the robot is facing, the direction will be one of: IS_NORTH, IS_EAST, IS_SOUTH, IS_WEST
+#define USELESS 255         //a really high value to put as the distance in a cell to keep the robot from going in there, like with dead ends
 
 void setup()
-{
-	
+{	
+        //start serial
 	Serial.begin (9600);
 	
+        //start motor shield
 	AFMS.begin();
 	
-	leftMotor->setSpeed(30);
-	rightMotor->setSpeed(30);
+        //initialize the encoders
+	PololuWheelEncoders::init(ENCODER_LEFT_A, ENCODER_LEFT_B, ENCODER_RIGHT_B, ENCODER_RIGHT_A);
+
+        //connect the IR sensors
+	leftIrSensor.begin(LEFT_IR_PIN);
+	rightIrSensor.begin(RIGHT_IR_PIN);
 	
-	//PololuWheelEncoders::init(ENCODER_LEFT_B, ENCODER_LEFT_A, ENCODER_RIGHT_B, ENCODER_RIGHT_A);
-
-
-	irLeft.begin(LEFT_IR_PIN);
-	irRight.begin(RIGHT_IR_PIN);
-
-
-	delay(5000);
-	
-	LEFT_ENCODER_TICKS_FORWARD = 66;//LeftWheelEncoder.read();//PololuWheelEncoders::getCountsAndResetM1();	
-	RIGHT_ENCODER_TICKS_FORWARD = 66;//RightWheelEncoder.read();//PololuWheelEncoders::getCountsAndResetM2();
-	LeftWheelEncoder.write(0);
-	RightWheelEncoder.write(0);
-
-	Serial.println(F("TICKS"));
-	Serial.println(LEFT_ENCODER_TICKS_FORWARD);
-	Serial.println(RIGHT_ENCODER_TICKS_FORWARD);
 	//Setup the trigger and Echo pins of the HC-SR04 sensor
 	pinMode(trigPin, OUTPUT);
 	pinMode(echoPin, INPUT);
 	pinMode(LEDPin, OUTPUT); // Use LED indicator (if required)
 
-	
+	//initialize the maze with the position info and no known walls
 	for (byte y = 0; y < MAZE_LENGTH; y++)
 	{
 		for(byte x = 0; x < MAZE_LENGTH; x++)
 		{
 		
-			maze[x][y].position = (x << SHIFT); //x position
+			maze[x][y].position = (x << X_SHIFT); //x position
 			maze[x][y].position |= (y);//y position
 			maze[x][y].data = 0x00;
 			
 		}
 	}
-	//fill the distances
+	//fill the distances of each cell
 	byte half = MAZE_LENGTH / 2;
 	for (byte y = 0; y < half; y++)
 	{
@@ -160,28 +141,31 @@ void setup()
 			maze[x][MAZE_LENGTH - 1 - y].distance = m;
 		}
 	}
+        //this is just a test to make sure the distance map is generated correctly
 	printMap();
-	currentDirection = ISNORTH;
-	currentCell = &maze[0][0];
-	currentCell->data |= ISEAST;
-	currentCell->data |= ISWEST;
-	currentCell->data |= ISSOUTH;
-	currentCell->data |= ISEXPLORED;
-	stack.push(currentCell);
-	
+
+        //setup the information of the first cell when the robot is in cell 0,0
+	currentDirection = IS_NORTH;        //this direction is now considered north, all the cool kids say so
+	currentCell = &maze[0][0];          //the currentCell pointer now points to the address of the 0,0 cell
+	currentCell->data |= IS_EAST;       //assume the cell has an east wall
+	currentCell->data |= IS_WEST;       //assume the cell has a west wall
+	currentCell->data |= IS_SOUTH;      //assume the cell has a south wall
+	currentCell->data |= IS_EXPLORED;   //the robot is in it so mark the cell as explored
+	stack.push(currentCell);            //push the first cell on to the stack of cell locations
 }
 
 
 
 void loop()
 {
-	while (currentCell->distance == 0);
-	updateWalls();
-	byte moveDirection = getBestDirection();
-	move(moveDirection);
+	while (currentCell->distance == 0);//makes it stop in the center
+	updateWalls();//check to see if there are wall left, right, and ahead
+	byte moveDirection = getBestDirection();//determine which way the robot should drive
+	move(moveDirection);//drive that determined way
 	
 }
 
+//should kinda explain its self
 void stop()
 {
 	leftMotor->run(RELEASE);
@@ -213,7 +197,6 @@ int getSonarDistance()
 	if (HR_dist >= maximumRange || HR_dist <= minimumRange)
 	{
 		// Send a 0 to computer and Turn LED ON to indicate "out of range" 
-//Serial.println("0");
 		digitalWrite(LEDPin, HIGH);
 		return 0;
 	}
@@ -221,15 +204,15 @@ int getSonarDistance()
 	{
 		// Send the distance to the computer using Serial protocol, and
 		//turn LED OFF to indicate successful reading. 
-//Serial.println(HR_dist);
 		digitalWrite(LEDPin, LOW);		
 		return HR_dist;
 	}
 }
 
-
+//my best attempt at driving straight in a maze using a master and slave motor as well as correcting with the sensors
 void driveStraight()
 {
+        //set the motors to drive forward
 	leftMotor->run(FORWARD);
 	rightMotor->run(FORWARD);
 	//The powers we give to both motors. masterPower will remain constant while slavePower will change so that
@@ -246,34 +229,32 @@ void driveStraight()
 	//error is multiplied by, but we cannot use floating point numbers. Basically, it lets us choose how much
 	//the difference in encoder values effects the final power change to the motor.
 	int kp = 3;
-	
-	leftEncoder = 0;
-	rightEncoder = 0;
 
-	int currentLeft;
-	int currentRight;
-	bool isCloseToWall = false;
-	
-	
-
-
-
-
+	int currentLeft;  //the value retreived from the left encoder before it is reset
+	int currentRight; //the value retreived from the right encoder before it is reset
+	bool isCloseToWall = false;//if the loop of driving straight has to break, this determines if it was because it was to close to a wall
 	
 
 	//while the robot has not moved forward one cell
 	while(true)
 	{
-		forwardDistance = getSonarDistance();
-		leftIR = irLeft.getDistanceCentimeter();
-		rightIR = irRight.getDistanceCentimeter();
+		forwardDistance = getSonarDistance();//update the distance of the front sensor
+		leftIrSensorValue = leftIrSensor.getDistanceCentimeter();//update the left IR sensor value
+		rightIrSensorValue = rightIrSensor.getDistanceCentimeter();//update the right IR sensor value
 
 
-		if(forwardDistance < WALL_THRESHOLD_FORWARD || leftIR < WALL_THRESHOLD_LEFT || rightIR < WALL_THRESHOLD_RIGHT)
+		if(forwardDistance < WALL_THRESHOLD_FORWARD     //if close to the front wall
+                  || leftIrSensorValue < WALL_THRESHOLD_LEFT    //or close to the left wall
+                  || rightIrSensorValue < WALL_THRESHOLD_RIGHT) //or close to the right wall
 		{
 			isCloseToWall = true;
 			break;
 		}
+                if(leftEncoderValue > LEFT_ENCODER_TICKS_FORWARD   //if the left wheel has turned enough times
+                && rightEncoderValue > RIGHT_ENCODER_TICKS_FORWARD)//if the right wheel has turned enough times
+                {
+                   break;
+                }
 
 
 		//Set the motor powers to their respective variables.
@@ -284,14 +265,12 @@ void driveStraight()
 		//motor power needs to change. For example, if the left motor is moving faster than the right, then this will come
 		//out as a positive number, meaning the right motor has to speed up.
 		//Reset the encoders every loop so we have a fresh value to use to calculate the error.
-		currentLeft = LeftWheelEncoder.read();//PololuWheelEncoders::getCountsAndResetM1();
-		currentRight = RightWheelEncoder.read();//PololuWheelEncoders::getCountsAndResetM2();
-		LeftWheelEncoder.write(0);
-		RightWheelEncoder.write(0);
+		currentLeft = PololuWheelEncoders::getCountsAndResetM1();
+		currentRight = PololuWheelEncoders::getCountsAndResetM2();
 
-		leftEncoder += currentLeft;
-		rightEncoder += currentRight;
-		error = currentLeft - currentRight;
+		leftEncoderValue += currentLeft;    //update the global value of the left encoder
+		rightEncoderValue += currentRight;  //update the global value of the right encoder
+		error = currentLeft - currentRight; //calculate the error
 
 		//This adds the error to slavePower, divided by kp. The '+=' operator literally means that this expression really says
 		//"slavePower = slavepower + error / kp", effectively adding on the value after the operator.
@@ -307,13 +286,13 @@ void driveStraight()
 	if(isCloseToWall)
 	{
 		//the sensor detects it's approaching the left wall then turn right slightly
-		if(leftIR < WALL_THRESHOLD_LEFT)
+		if(leftIrSensorValue < WALL_THRESHOLD_LEFT)
 		{
 			leftMotor->setSpeed(TURN_CORRECTION);
 			rightMotor->run(RELEASE);//turn off the right motor
 		}
 		//the sensor detects it's approaching the right wall then turns left slightly
-		else if(rightIR < WALL_THRESHOLD_RIGHT)
+		else if(rightIrSensorValue < WALL_THRESHOLD_RIGHT)
 		{
 			leftMotor->run(RELEASE);//turn off the left motor
 			rightMotor->setSpeed(TURN_CORRECTION);
@@ -339,21 +318,21 @@ void turn(int direction)
 	leftMotor->run((direction == LEFT) ? BACKWARD : FORWARD);
 	rightMotor->run((direction == LEFT) ? FORWARD : BACKWARD);
 
-	//PololuWheelEncoders::getCountsAndResetM1();
-	//PololuWheelEncoders::getCountsAndResetM2();
-	LeftWheelEncoder.write(0);
-	RightWheelEncoder.write(0);
+	PololuWheelEncoders::getCountsAndResetM1();
+	PololuWheelEncoders::getCountsAndResetM2();
+	//LeftWheelEncoder.write(0);
+	//RightWheelEncoder.write(0);
 
-	rightEncoder = 0;
+	rightEncoderValue = 0;
 	if(direction == LEFT)
 	{
 		//reset the encoder to 0
 
 		//right wheel is moving forward
-		while(rightEncoder < TURN_NUMBER_LEFT)
+		while(rightEncoderValue < TURN_NUMBER_LEFT)
 		{
-			rightEncoder = RightWheelEncoder.read();//PololuWheelEncoders::getCountsM2();
-			//Serial.println(rightEncoder);
+			rightEncoderValue = PololuWheelEncoders::getCountsM2();
+			//Serial.println(rightEncoderValue);
 
 		}
 	}
@@ -361,9 +340,9 @@ void turn(int direction)
 	{
 		//left wheel is moving forward
 
-		while(rightEncoder > TURN_NUMBER_RIGHT)
+		while(rightEncoderValue > TURN_NUMBER_RIGHT)
 		{
-			rightEncoder = RightWheelEncoder.read();//PololuWheelEncoders::getCountsM2();
+			rightEncoderValue = PololuWheelEncoders::getCountsM2();
 
 		}
 	}
@@ -396,15 +375,15 @@ void printMap()
 
 void updateWalls()
 {
-	if (getSonarDistance() <= WALL_THRESHOLD_FORWARD)
+	if (getSonarDistance() <= CHECK_DISTANCE_FORWARD)
 	{
 		updateWall(currentDirection);
 	}
-	if (irLeft.getDistanceCentimeter() <= WALL_THRESHOLD_LEFT)
+	if (leftIrSensor.getDistanceCentimeter() <= CHECK_DISTANCE_LEFT)
 	{
 		updateWall(getDirection(LEFT));
 	}
-	if (irRight.getDistanceCentimeter() <= WALL_THRESHOLD_RIGHT)
+	if (rightIrSensor.getDistanceCentimeter() <= CHECK_DISTANCE_RIGHT)
 	{
 		updateWall(getDirection(RIGHT));
 	}
@@ -421,42 +400,42 @@ byte getDirection(byte direction)
 	{
 		switch (currentDirection)
 		{
-			case ISNORTH:
-				return ISWEST;
-			case ISEAST:
-				return ISNORTH;
-			case ISSOUTH:
-				return ISEAST;
-			case ISWEST:
-				return ISSOUTH;
+			case IS_NORTH:
+				return IS_WEST;
+			case IS_EAST:
+				return IS_NORTH;
+			case IS_SOUTH:
+				return IS_EAST;
+			case IS_WEST:
+				return IS_SOUTH;
 		}
 	}
 	else if (direction == RIGHT)
 	{
 		switch (currentDirection)
 		{
-			case ISNORTH:
-				return ISEAST;
-			case ISEAST:
-				return ISSOUTH;
-			case ISSOUTH:
-				return ISWEST;
-			case ISWEST:
-				return ISNORTH;
+			case IS_NORTH:
+				return IS_EAST;
+			case IS_EAST:
+				return IS_SOUTH;
+			case IS_SOUTH:
+				return IS_WEST;
+			case IS_WEST:
+				return IS_NORTH;
 		}
 	}	
 	else//turn around
 	{
 		switch (currentDirection)
 		{
-		case ISNORTH:
-			return ISSOUTH;
-		case ISEAST:
-			return ISWEST;
-		case ISSOUTH:
-			return ISNORTH;
-		case ISWEST:
-			return ISEAST;
+		case IS_NORTH:
+			return IS_SOUTH;
+		case IS_EAST:
+			return IS_WEST;
+		case IS_SOUTH:
+			return IS_NORTH;
+		case IS_WEST:
+			return IS_EAST;
 		}
 	}
 }
@@ -519,57 +498,57 @@ byte getBestDirection()
 		return getDirection(LEFT);
 	}
 	
-	return getDirection(BEHIND);
+	return getDirection(OPPOSITE);
 }
 bool getIsCellExplored(byte direction)
 {
-	byte x = (currentCell->position >> SHIFT);
+	byte x = (currentCell->position >> X_SHIFT);
 	byte y = (currentCell->position & Y_ONLY);
 	switch (direction)
 	{
-	case ISNORTH:
+	case IS_NORTH:
 		y++;
 		break;
-	case ISEAST:
+	case IS_EAST:
 		x++;
 		break;
-	case ISSOUTH:
+	case IS_SOUTH:
 		y--;
 		break;
-	case ISWEST:
+	case IS_WEST:
 		x--;
 		break;
 	}
-	return maze[x][y].data & ISEXPLORED;
+	return maze[x][y].data & IS_EXPLORED;
 }
 byte getCellDistance(byte direction)
 {
-	byte x = (currentCell->position >> SHIFT);
+	byte x = (currentCell->position >> X_SHIFT);
 	byte y = (currentCell->position & Y_ONLY);
 	switch (direction)
 	{
-		case ISNORTH:
+		case IS_NORTH:
 			y++;
 			if (y == MAZE_LENGTH)
 			{
 				return USELESS;
 			}
 			break;
-		case ISEAST:
+		case IS_EAST:
 			x++;
 			if (x == MAZE_LENGTH)
 			{
 				return USELESS;
 			}
 			break;
-		case ISSOUTH:
+		case IS_SOUTH:
 			if (y == 0)
 			{
 				return USELESS;
 			}
 			y--;
 			break;
-		case ISWEST:
+		case IS_WEST:
 			if (x == 0)
 			{
 				return USELESS;
@@ -601,27 +580,31 @@ void move(byte direction)
 	}
 	forwardDistance = getSonarDistance();
 	int goalDistance = forwardDistance - CHECK_DISTANCE_FORWARD;
-	//while (!(forwardDistance < goalDistance && leftEncoder >= LEFT_ENCODER_TICKS_FORWARD && rightEncoder >= RIGHT_ENCODER_TICKS_FORWARD))
-	while ((leftEncoder < LEFT_ENCODER_TICKS_FORWARD && rightEncoder < RIGHT_ENCODER_TICKS_FORWARD))
+        leftEncoderValue = 0;
+        rightEncoderValue = 0;
+	//while (!(forwardDistance < goalDistance && leftEncoderValue >= LEFT_ENCODER_TICKS_FORWARD && rightEncoderValue >= RIGHT_ENCODER_TICKS_FORWARD))
+	while ((leftEncoderValue < LEFT_ENCODER_TICKS_FORWARD && rightEncoderValue < RIGHT_ENCODER_TICKS_FORWARD))
 	{
+                Serial.println(leftEncoderValue);
+                Serial.println(rightEncoderValue);
 		driveStraight();
 	}		
 	stop();
 
-	byte x = (currentCell->position >> SHIFT);
+	byte x = (currentCell->position >> X_SHIFT);
 	byte y = (currentCell->position & Y_ONLY);
 	switch (currentDirection)
 	{
-		case ISNORTH:
+		case IS_NORTH:
 			y++;
 			break;
-		case ISEAST:
+		case IS_EAST:
 			x++;			
 			break;
-		case ISSOUTH:
+		case IS_SOUTH:
 			y--;
 			break;
-		case ISWEST:
+		case IS_WEST:
 			x--;
 			break;
 	}
@@ -634,6 +617,6 @@ void move(byte direction)
 		//I am pretty sure I spelled ^ wrong
 		while (stack.pop() != currentCell);
 	}
-	currentCell->data |= ISEXPLORED;
+	currentCell->data |= IS_EXPLORED;
 	stack.push(currentCell);
 }
