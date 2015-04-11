@@ -606,6 +606,7 @@ void move(byte direction)
 			turn(LEFT);
 		}
 	}
+	forwardDistance = getSonarDistance();
 	int goalDistance = forwardDistance - CHECK_DISTANCE_FORWARD;
 	while (forwardDistance < goalDistance && leftEncoder >= LEFT_ENCODER_TICKS_FORWARD && rightEncoder >= RIGHT_ENCODER_TICKS_FORWARD)
 	{
