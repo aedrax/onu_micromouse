@@ -120,7 +120,7 @@ void setup()
 	irRight.begin(RIGHT_IR_PIN);
 
 
-	//delay(5000);
+	delay(5000);
 	
 	LEFT_ENCODER_TICKS_FORWARD = LeftWheelEncoder.read();//PololuWheelEncoders::getCountsAndResetM1();	
 	RIGHT_ENCODER_TICKS_FORWARD = RightWheelEncoder.read();//PololuWheelEncoders::getCountsAndResetM2();
