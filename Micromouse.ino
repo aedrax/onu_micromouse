@@ -122,8 +122,8 @@ void setup()
 
 	delay(5000);
 	
-	LEFT_ENCODER_TICKS_FORWARD = LeftWheelEncoder.read();//PololuWheelEncoders::getCountsAndResetM1();	
-	RIGHT_ENCODER_TICKS_FORWARD = RightWheelEncoder.read();//PololuWheelEncoders::getCountsAndResetM2();
+	LEFT_ENCODER_TICKS_FORWARD = 66;//LeftWheelEncoder.read();//PololuWheelEncoders::getCountsAndResetM1();	
+	RIGHT_ENCODER_TICKS_FORWARD = 66;//RightWheelEncoder.read();//PololuWheelEncoders::getCountsAndResetM2();
 	LeftWheelEncoder.write(0);
 	RightWheelEncoder.write(0);
 
@@ -168,9 +168,6 @@ void setup()
 	currentCell->data |= ISSOUTH;
 	currentCell->data |= ISEXPLORED;
 	stack.push(currentCell);
-	bool canMove = !(currentCell->data & currentDirection); 
-	bool better = currentCell->distance > getCellDistance(currentDirection);
-	bool isExplored = !getIsCellExplored(currentDirection);
 	
 }
 
@@ -604,7 +601,8 @@ void move(byte direction)
 	}
 	forwardDistance = getSonarDistance();
 	int goalDistance = forwardDistance - CHECK_DISTANCE_FORWARD;
-	while (!(forwardDistance < goalDistance && leftEncoder >= LEFT_ENCODER_TICKS_FORWARD && rightEncoder >= RIGHT_ENCODER_TICKS_FORWARD))
+	//while (!(forwardDistance < goalDistance && leftEncoder >= LEFT_ENCODER_TICKS_FORWARD && rightEncoder >= RIGHT_ENCODER_TICKS_FORWARD))
+	while ((leftEncoder < LEFT_ENCODER_TICKS_FORWARD && rightEncoder < RIGHT_ENCODER_TICKS_FORWARD))
 	{
 		driveStraight();
 	}		
