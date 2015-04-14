@@ -129,6 +129,27 @@ void setup()
 		}
 	}
 	//fill the distances of each cell
+	//this will result in generating cell distances for each cell
+	//for example and 8x8 maze would look like this:
+	/*
+	+---+---+---+---+---+---+---+---+
+	| 6 | 5 | 4 | 3 | 3 | 4 | 5 | 6 |
+	+---+---+---+---+---+---+---+---+
+	| 5 | 4 | 3 | 2 | 2 | 3 | 4 | 5 |
+	+---+---+---+---+---+---+---+---+
+	| 4 | 3 | 2 | 1 | 1 | 2 | 3 | 4 |
+	+---+---+---+---+---+---+---+---+
+	| 3 | 2 | 1 | 0 | 0 | 1 | 2 | 3 |
+	+---+---+---+---+---+---+---+---+
+	| 3 | 2 | 1 | 0 | 0 | 1 | 2 | 3 |
+	+---+---+---+---+---+---+---+---+
+	| 4 | 3 | 2 | 1 | 1 | 2 | 3 | 4 |
+	+---+---+---+---+---+---+---+---+
+	| 5 | 4 | 3 | 2 | 2 | 3 | 4 | 5 |
+	+---+---+---+---+---+---+---+---+
+	| 6 | 5 | 4 | 3 | 3 | 4 | 5 | 6 |
+	+---+---+---+---+---+---+---+---+
+	*/
 	byte half = MAZE_LENGTH / 2;
 	for (byte y = 0; y < half; y++)
 	{
@@ -141,6 +162,7 @@ void setup()
 			maze[x][MAZE_LENGTH - 1 - y].distance = m;
 		}
 	}
+	
         //this is just a test to make sure the distance map is generated correctly
 	printMap();
 
