@@ -130,7 +130,7 @@ void setup()
 	}
 	//fill the distances of each cell
 	//this will result in generating cell distances for each cell
-	//for example and 8x8 maze would look like this:
+	//for example an 8x8 maze would look like this:
 	/*
 	+---+---+---+---+---+---+---+---+
 	| 6 | 5 | 4 | 3 | 3 | 4 | 5 | 6 |
@@ -335,48 +335,51 @@ void driveStraight()
 
 void turn(int direction)
 {
+	//set both motors to the correct turn speed
 	leftMotor->setSpeed(TURN_SPEED);
 	rightMotor->setSpeed(TURN_SPEED);
+	
+	//if turning left, left motor is backward and right motor is forward
+	//if turning right, left motor is forward and right motor is backward
 	leftMotor->run((direction == LEFT) ? BACKWARD : FORWARD);
 	rightMotor->run((direction == LEFT) ? FORWARD : BACKWARD);
 
+	//reset the encoder values
 	PololuWheelEncoders::getCountsAndResetM1();
 	PololuWheelEncoders::getCountsAndResetM2();
 	//LeftWheelEncoder.write(0);
 	//RightWheelEncoder.write(0);
 
+	//we are basing our turns based on how far the right encoder has changed
+	//so set that to 0
 	rightEncoderValue = 0;
 	if(direction == LEFT)
 	{
-		//reset the encoder to 0
-
 		//right wheel is moving forward
 		while(rightEncoderValue < TURN_NUMBER_LEFT)
 		{
+			//update the rightEncoderValue to whatever it is
 			rightEncoderValue = PololuWheelEncoders::getCountsM2();
-			//Serial.println(rightEncoderValue);
-
 		}
 	}
 	else
 	{
-		//left wheel is moving forward
-
+		//right wheel is moving backward
 		while(rightEncoderValue > TURN_NUMBER_RIGHT)
 		{
+			//update the rightEncoderValue to whatever it is
 			rightEncoderValue = PololuWheelEncoders::getCountsM2();
-
 		}
 	}
-
-	leftMotor->run(RELEASE);
-	rightMotor->run(RELEASE);
+	
+	stop();
 	//delay half a second
 	delay(500);
+	//update the current direction to whatever was left or right of the old direction
 	currentDirection = getDirection(direction);
 }
 
-
+//this was just for testing to pring a map of the distances of the cells
 void printMap()
 {
 	for (int i = 0; i < MAZE_LENGTH; i++)
@@ -394,17 +397,20 @@ void printMap()
 
 
 
-
+//updateds the cells to say if there are walls on the various sides of the cell
 void updateWalls()
 {
+	//check the front sensor and update the wall if there is one there
 	if (getSonarDistance() <= CHECK_DISTANCE_FORWARD)
 	{
 		updateWall(currentDirection);
 	}
+	//check the left sensor and update the wall if there is one there
 	if (leftIrSensor.getDistanceCentimeter() <= CHECK_DISTANCE_LEFT)
 	{
 		updateWall(getDirection(LEFT));
 	}
+	//check the right sensor and update the wall if there is one there
 	if (rightIrSensor.getDistanceCentimeter() <= CHECK_DISTANCE_RIGHT)
 	{
 		updateWall(getDirection(RIGHT));
@@ -413,9 +419,11 @@ void updateWalls()
 
 void updateWall(byte direction)
 {
+	//enables the wall exists bit in the current cell for the current direction
 	currentCell->data |= direction;
 }
 
+//returns the direction which is left, right, or opposite of the current direction
 byte getDirection(byte direction)
 {
 	if (direction == LEFT)
